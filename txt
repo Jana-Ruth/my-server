@@ -1,0 +1,555 @@
+// // 🔹 Create product controller
+// export const createProduct = async (req, res) => {
+//   try {
+//     // Step 1: Upload image to Cloudinary
+//     let imageUrl = null;
+//     if (req.file) {
+//       const result = await cloudinary.v2.uploader.upload(req.file.path, {
+//         folder: "products",
+//       });
+//       imageUrl = result.secure_url;
+//     }
+
+//     // Step 2: Create product with the uploaded image URL
+//     const product = await Product.create({
+//       title: req.body.title,
+//       price: req.body.price,
+//       tag: req.body.tag,
+//       description: req.body.description,
+//       features: req.body.features ? req.body.features.split(",") : [],
+//       techs: req.body.techs ? req.body.techs.split(",") : [],
+//       imageUrl,
+//     });
+
+//     res.status(201).json({
+//       message: "✅ Product created successfully",
+//       product,
+//     });
+//   } catch (error) {
+//     res.status(500).json({
+//       message: "❌ Failed to create product",
+//       error: error.message,
+//     });
+//   }
+// };
+// export const deleteProduct = async (req, res) => {
+//   try {
+//     // 1️⃣ Find product by ID
+//     const product = await Product.findById(req.params.id);
+//     if (!product) {
+//       return res.status(404).json({ message: "Product not found" });
+//     }
+
+//     // 2️⃣ Delete main image from Cloudinary
+//     if (product.imageUrl) {
+//       try {
+//         // Extract the public ID from the image URL
+//         const publicId = product.imageUrl.split("/").pop().split(".")[0];
+//         await cloudinary.uploader.destroy(`products/${publicId}`);
+//       } catch (error) {
+//         console.warn("Main image not found on Cloudinary:", error.message);
+//       }
+//     }
+
+//     // 3️⃣ Delete subImages from Cloudinary (if they exist)
+//     if (product.subImages && product.subImages.length > 0) {
+//       for (const img of product.subImages) {
+//         try {
+//           const publicId = img.split("/").pop().split(".")[0];
+//           await cloudinary.uploader.destroy(`products/${publicId}`);
+//         } catch (error) {
+//           console.warn("Subimage not found on Cloudinary:", error.message);
+//         }
+//       }
+//     }
+
+//     // 4️⃣ Delete product from MongoDB
+//     await Product.findByIdAndDelete(req.params.id);
+
+//     // 5️⃣ Respond
+//     res.json({ message: "✅ Product deleted successfully (with images)" });
+//   } catch (err) {
+//     console.error("Delete Product Error:", err);
+//     res.status(500).json({
+//       message: "❌ Failed to delete product",
+//       error: err.message,
+//     });
+//   }
+// };
+
+
+
+
+// import bcrypt from "bcryptjs";
+// import jwt from "jsonwebtoken";
+// import User from "../models/user.js";
+// import { Resend } from "resend";
+// import dotenv from "dotenv";
+// import Product from "../models/Product.js";
+// import Cart from "../models/Cart.js";
+// dotenv.config();
+
+// const resend = new Resend(process.env.RESEND_API_KEY);
+// // Generate a 6-digit OTP
+// const generateOTP = () =>
+//   Math.floor(100000 + Math.random() * 900000).toString();
+
+// export const signup = async (req, res) => {
+//   try {
+//     const { name, email, password, phoneNumber } = req.body;
+
+//     // 🔎 Check if user already exists
+//     const existingUser = await User.findOne({ email });
+//     if (existingUser)
+//       return res.status(400).json({ message: "Email already registered" });
+
+//     // 🔐 Hash password
+//     const hashedPassword = await bcrypt.hash(password, 10);
+
+//     // 🧍‍♀️ Create new user (unverified)
+//     const newUser = new User({
+//       name,
+//       email,
+//       password: hashedPassword,
+//       isVerified: false, // add this field to your schema
+//       ...(phoneNumber && { phoneNumber }), // only add phoneNumber if it's provided
+//     });
+//     await newUser.save();
+
+//     // 🪪 Generate verification token (valid for 24 hours)
+//     const token = jwt.sign({ id: newUser._id }, process.env.JWT_SECRET, {
+//       expiresIn: "1d",
+//     });
+
+//     // 🌐 Verification link (use frontend URL)
+//     const verifyLink = `${process.env.BASE_URL}/verify/${token}`;
+
+//     // 💌 Send confirmation email via Resend
+//     await resend.emails.send({
+//       from: "fadqus@fadqusintl.com", // use your verified sender domain
+//       to: email,
+//       subject: "Confirm Your Account",
+//       html: `
+//        <div style="background-color:#f5f7fa;padding:40px 0;font-family:Arial,sans-serif;">
+//   <div style="max-width:600px;width:90%;margin:0 auto;background:#ffffff;border-radius:8px;padding-bottom:40px;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,0.05);">
+
+//     <!-- Header Section -->
+//     <div
+//       style="
+//         margin-bottom: 20px;
+//         border-radius: 8px 8px 0 0;
+//         background-color: #F2F5FF;
+//         background-image: url('https://i.ibb.co/Y4ZhCvBQ/Lines.png');
+//         background-size: cover;
+//         background-position: center;
+//         padding: 20px 0;
+//       "
+//     >
+//       <img
+//         src="https://lh3.googleusercontent.com/a-/ALV-UjX_o3l7e8TJu7Fwa8KYlUWRixg9pDr1ejjkwz-hdnprHk8oCNc=w72-h72-p-rp-mo-br100"
+//         alt="Fadqus Logo"
+//         width="60"
+//         style="display:block;margin:0 auto;"
+//       />
+//     </div>
+
+//     <!-- Envelope Icon -->
+//     <div style="margin-bottom:20px;">
+//       <img src="https://i.ibb.co/6cJ7gGjP/envelope-yellow.png" alt="Email Icon" width="80" style="display:block;margin:0 auto;" />
+//     </div>
+
+//     <!-- Title & Subtitle -->
+//     <h2 style="padding:0 8%;color:#111827;font-size:24px;margin-bottom:8px;font-weight:700;">
+//       Welcome to Fadqus Template Market
+//     </h2>
+//     <p style="color:#6b7280;font-size:15px;padding:0 8%;margin-top:0;margin-bottom:24px;">
+//       Find Your Next Design Template Fast & Ready to Use
+//     </p>
+
+//     <!-- Body Content -->
+//     <div style="text-align:left;color:#374151;font-size:15px;line-height:1.8;padding:0 8%;">
+//       <p style="margin:0 0 10px 0;">
+//         <strong style="font-size:18px;font-weight:700;color:#045B88;">Hey ${name},</strong>
+//       </p>
+//       <p style="margin:0 0 10px 0;">
+//         Discover premium, ready-to-use design templates made to save you time and elevate your projects.
+//         From websites to landing pages — we’ve got you covered.
+//       </p>
+//       <p style="margin:0;">
+//         Explore 
+//         <a href="https://www.fadqustemplatemarket.com" style="color:#045B88;text-decoration:underline;">
+//           www.fadqustemplatemarket.com
+//         </a>
+//       </p>
+//     </div>
+
+//     <!-- Button -->
+//     <div style="padding:0 8%;margin-top:25px;">
+//       <a href="${verifyLink}"
+//         style="display:inline-block;background-color:#045B88;color:#ffffff;text-decoration:none;
+//         padding:14px 45px;border-radius:8px;font-weight:700;font-size:17px;margin-top:20px;">
+//         Continue
+//       </a>
+//     </div>
+
+//     <!-- Footer Text -->
+//     <p style="color:#9ca3af;font-size:12px;margin-top:30px;padding:0 8%;">
+//       This link will expire in 24 hours. If you didn’t create this account, please ignore this email.
+//     </p>
+//   </div>
+// </div>
+//       `,
+//     });
+
+//     res.status(201).json({
+//       message: "Confirmation email sent to your inbox.",
+//     });
+//   } catch (err) {
+//     console.error("Signup Error:", err);
+//     res.status(500).json({
+//       message: "Signup failed",
+//       error: err.message,
+//     });
+//   }
+// };
+
+// /* 🟣 VERIFY EMAIL */
+// export const verifyEmail = async (req, res) => {
+//   try {
+//     const { token } = req.params;
+
+//     // Decode token
+//     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+//     // Find user
+//     const user = await User.findById(decoded.id);
+//     if (!user) return res.status(404).json({ message: "User not found" });
+
+//     // Verify user
+//     user.isVerified = true;
+//     await user.save();
+
+//     res.json({ message: "Email verified successfully. You can now log in." });
+//   } catch (err) {
+//     res
+//       .status(400)
+//       .json({ message: "Invalid or expired token", error: err.message });
+//   }
+// };
+
+// export const deleteUser = async (req, res) => {
+//   try {
+//     await User.findByIdAndDelete(req.params.id);
+//     res.json({ message: "User deleted successfully" });
+//   } catch (err) {
+//     res.status(500).json({ message: "Failed to delete user", error: err.message });
+//   }
+// };
+
+// // 🔵 LOGIN
+// export const login = async (req, res) => {
+//   try {
+//     const { email, password } = req.body;
+//     const user = await User.findOne({ email });
+//     if (!user) return res.status(404).json({ message: "User not found" });
+//     // if (!user.isVerified) return res.status(400).json({ message: "Please verify your email first" });
+
+//     const isMatch = await bcrypt.compare(password, user.password);
+//     if (!isMatch)
+//       return res.status(400).json({ message: "Invalid credentials" });
+
+//     const token = jwt.sign(
+//       { id: user._id, role:user.role }, 
+//       process.env.JWT_SECRET, {
+//       expiresIn: "1d",
+//     });
+//     res.json({ message: "Login successful", token });
+//   } catch (err) {
+//     res.status(500).json({ message: "Login failed", error: err.message });
+//   }
+// };
+
+// // 🔴 FORGOT PASSWORD (send OTP)
+// export const forgotPassword = async (req, res) => {
+//   try {
+//     const { email } = req.body;
+//     const user = await User.findOne({ email });
+//     if (!user) return res.status(404).json({ message: "User not found" });
+
+//     const otp = generateOTP();
+//     user.otp = otp;
+//     user.otpExpires = Date.now() + 10 * 60 * 1000; // 10 mins
+//     await user.save();
+
+//     const html = `
+//       <h3>Password Reset Request</h3>
+//       <p>Your OTP code is: <strong>${otp}</strong></p>
+//       <p>This code will expire in 10 minutes.</p>
+//     `;
+
+//     await resend.emails.send({
+//       from: "fadqus@fadqusintl.com", // use your verified sender
+//       to: email,
+//       subject: "Password Reset OTP",
+//       html: html,
+//     });
+
+//     res.json({ message: "OTP sent to your email" });
+//   } catch (err) {
+//     res.status(500).json({ message: "Error sending OTP", error: err.message });
+//   }
+// };
+
+// // 🟠 RESET PASSWORD (with OTP)
+// export const resetPassword = async (req, res) => {
+//   try {
+//     const { email, otp, newPassword } = req.body;
+//     const user = await User.findOne({ email });
+
+//     if (!user) {
+//       return res.status(404).json({ message: "User not found" });
+//     }
+
+//     // Normalize OTPs to strings and trim whitespace
+//     if (
+//       !user.otp ||
+//       user.otp.trim() !== otp.toString().trim() ||
+//       user.otpExpires < Date.now()
+//     ) {
+//       return res.status(400).json({ message: "Invalid or expired OTP" });
+//     }
+
+//     // Hash new password and clear OTP
+//     user.password = await bcrypt.hash(newPassword, 10);
+//     user.otp = undefined;
+//     user.otpExpires = undefined;
+//     await user.save();
+
+//     res.json({ message: "Password reset successful" });
+//   } catch (err) {
+//     console.error("Reset Password Error:", err);
+//     res
+//       .status(500)
+//       .json({ message: "Password reset failed", error: err.message });
+//   }
+// };
+
+
+
+
+// export const getUserDetails = async (req, res) => {
+//   try {
+//     const user = await User.findById(req.user.id).select(
+//       "-password -otp -otpExpires"
+//     );
+//     if (!user) {
+//       return res.status(404).json({ message: "User not found" });
+//     }
+//     res.json(user);
+//   } catch (err) {
+//     res
+//       .status(500)
+//       .json({ message: "Failed to fetch user details", error: err.message });
+//   }
+// };
+
+// // POST /api/products
+// export const createProduct = async (req, res) => {
+//   try {
+//     const product = await Product.create(req.body);
+//     res.status(201).json({ message: "Product created successfully", product });
+//   } catch (error) {
+//     res.status(500).json({ message: "Failed to create product", error: error.message });
+//   }
+// };
+
+// export const deleteProduct = async (req, res) => {
+//   try {
+//     await Product.findByIdAndDelete(req.params.id);
+//     res.json({ message: "Product deleted successfully" });
+//   } catch (err) {
+//     res.status(500).json({ message: "Failed to delete product", error: err.message });
+//   }
+// };
+
+// // GET /api/products/:id
+// export const getProductById = async (req, res) => {
+//   try {
+//     const product = await Product.findById(req.params.id);
+//     if (!product) return res.status(404).json({ message: "Product not found" });
+//     res.json(product);
+//   } catch (error) {
+//     res.status(500).json({ message: "Failed to fetch product", error: error.message });
+//   }
+// };
+
+// // (Optional) GET /api/products
+// export const getAllProducts = async (req, res) => {
+//   try {
+//     const products = await Product.find();
+//     res.json(products);
+//   } catch (error) {
+//     res.status(500).json({ message: "Failed to fetch products", error: error.message });
+//   }
+// };
+
+// // PUT /api/auth/setRole/:id
+// export const setUserRole = async (req, res) => {
+//   try {
+//     const { role } = req.body;
+//     if (!["general", "admin"].includes(role)) {
+//       return res.status(400).json({ message: "Invalid role" });
+//     }
+
+//     const user = await User.findByIdAndUpdate(
+//       req.params.id,
+//       { role },
+//       { new: true }
+//     );
+
+//     if (!user) return res.status(404).json({ message: "User not found" });
+
+//     res.json({ message: `User role updated to ${role}`, user });
+//   } catch (err) {
+//     res.status(500).json({ message: "Failed to update role", error: err.message });
+//   }
+// };
+// // ➕ Add to Cart
+// export const addToCart = async (req, res) => {
+//   try {
+//     const { userId, productId, quantity } = req.body;
+
+//     const product = await Product.findById(productId);
+//     if (!product) return res.status(404).json({ message: "Product not found" });
+
+//     let cart = await Cart.findOne({ userId });
+
+//     if (cart) {
+//       const itemIndex = cart.products.findIndex(p => p.productId.toString() === productId);
+
+//       if (itemIndex > -1) {
+//         cart.products[itemIndex].quantity += quantity || 1;
+//       } else {
+//         cart.products.push({ productId, quantity });
+//       }
+//       await cart.save();
+//     } else {
+//       cart = new Cart({
+//         userId,
+//         products: [{ productId, quantity }],
+//       });
+//       await cart.save();
+//     }
+
+//     res.json({ message: "Product added to cart", cart });
+//   } catch (err) {
+//     res.status(500).json({ message: "Failed to add to cart", error: err.message });
+//   }
+// };
+
+// // ❌ Remove from Cart
+// export const removeFromCart = async (req, res) => {
+//   try {
+//     const { userId, productId } = req.params;
+
+//     const cart = await Cart.findOne({ userId });
+//     if (!cart) return res.status(404).json({ message: "Cart not found" });
+
+//     cart.products = cart.products.filter(
+//       (item) => item.productId.toString() !== productId
+//     );
+
+//     await cart.save();
+//     res.json({ message: "Product removed from cart", cart });
+//   } catch (err) {
+//     res.status(500).json({ message: "Failed to remove from cart", error: err.message });
+//   }
+// };
+
+// // 🧹 Clear Cart
+// export const clearCart = async (req, res) => {
+//   try {
+//     const { userId } = req.params;
+//     const cart = await Cart.findOneAndDelete({ userId });
+//     if (!cart) return res.status(404).json({ message: "Cart not found" });
+
+//     res.json({ message: "Cart cleared successfully" });
+//   } catch (err) {
+//     res.status(500).json({ message: "Failed to clear cart", error: err.message });
+//   }
+// };
+
+
+
+
+
+
+
+
+// export const createProduct = async (req, res) => {
+//   try {
+//     let imageUrl = null;
+//     const subImageUrls = [];
+
+//     // Step 1: Upload main image (if present)
+//     if (req.files?.image?.[0]) {
+//       const result = await cloudinary.v2.uploader.upload(req.files.image[0].path, {
+//         folder: "products",
+//       });
+//       imageUrl = result.secure_url;
+//       fs.unlinkSync(req.files.image[0].path);
+//     }
+
+//     // Step 2: Upload sub-images (if any)
+//     if (req.files?.subImages?.length > 0) {
+//       for (const file of req.files.subImages) {
+//         const result = await cloudinary.v2.uploader.upload(file.path, {
+//           folder: "products",
+//         });
+//         subImageUrls.push(result.secure_url);
+//         fs.unlinkSync(file.path);
+//       }
+//     }
+
+//     // Step 3: Parse JSON or comma-separated lists safely
+//     const safeParse = (val) => {
+//       if (!val) return [];
+//       if (Array.isArray(val)) return val;
+//       try {
+//         const parsed = JSON.parse(val);
+//         if (Array.isArray(parsed)) return parsed;
+//       } catch {
+//         if (typeof val === "string") {
+//           return val.split(",").map((v) => v.trim());
+//         }
+//       }
+//       return [];
+//     };
+
+//     const features = safeParse(req.body.features);
+//     const techs = safeParse(req.body.techs);
+
+//     // Step 4: Create the product
+//     const product = await Product.create({
+//       title: req.body.title,
+//       price: req.body.price,
+//       tag: req.body.tag,
+//       description: req.body.description,
+//       features,
+//       techs,
+//       imageUrl: imageUrl || req.body.imageUrl, // fallback if no upload
+//       subImages: subImageUrls.length ? subImageUrls : req.body.subImages || [],
+//     });
+
+//     res.status(201).json({
+//       message: "✅ Product created successfully",
+//       product,
+//     });
+//   } catch (error) {
+//     console.error("❌ Product creation error:", error);
+//     res.status(500).json({
+//       message: "❌ Failed to create product",
+//       error: error.message,
+//     });
+//   }
+// };
