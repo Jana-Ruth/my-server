@@ -12,7 +12,10 @@ const productSchema = new mongoose.Schema(
     techs: [{ type: String }],
     imageUrl: { type: String },
     subImages: [{ type: String }],
+    downloadUrl: {type: String, required: true,},
   },
+  
+
   { timestamps: true }
 );
 

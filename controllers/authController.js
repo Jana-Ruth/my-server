@@ -180,7 +180,7 @@ export const login = async (req, res) => {
       return res.status(400).json({ message: "Invalid credentials" });
 
     const token = jwt.sign(
-      { id: user._id, role:user.role }, 
+      { id: user._id, role: user.role },
       process.env.JWT_SECRET, {
       expiresIn: "1d",
     });
@@ -543,44 +543,125 @@ export const clearCart = async (req, res) => {
 };
 
 
-export const createCheckoutSession = async (req, res) => {
-  try {
-    const { cartItems } = req.body;
+/* =========================
+   STRIPE CHECKOUT
+========================= */
+export const stripeCheckout = async (req, res) => {
+  const { userId, cartItems } = req.body;
 
-    if (!cartItems || cartItems.length === 0) {
-      return res.status(400).json({ message: "Cart is empty" });
-    }
+  const lineItems = cartItems.map(item => ({
+    price_data: {
+      currency: "usd",
+      product_data: { name: item.title },
+      unit_amount: item.price * 100,
+    },
+    quantity: item.quantity,
+  }));
 
-    // Stripe expects amount in cents (USD) or kobo (NGN)
-    const lineItems = cartItems.map((item) => ({
-      price_data: {
-        currency: "usd", // or "ngn" if you're set up for it
-        product_data: {
-          name: item.title,
-          images: [item.imageUrl],
-        },
-        unit_amount: Math.round(parseFloat(item.price) * 100), // $50.00 -> 5000
-      },
-      quantity: item.quantity || 1,
-    }));
+  const session = await stripe.checkout.sessions.create({
+    payment_method_types: ["card"],
+    mode: "payment",
+    line_items: lineItems,
+    success_url: `${process.env.FRONTEND_URL}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${process.env.FRONTEND_URL}/cart`,
+  });
 
-    const session = await stripe.checkout.sessions.create({
-      payment_method_types: ["card"],
-      mode: "payment",
-      line_items: lineItems,
-      success_url: "https://www.fadqustemplatemarket.com/success",
-      cancel_url: "https://www.fadqustemplatemarket.com/cancel",
-    });
+  await Order.create({
+    userId,
+    products: cartItems,
+    amount: cartItems.reduce((a, b) => a + b.price * b.quantity, 0),
+    currency: "USD",
+    gateway: "stripe",
+    reference: session.id,
+  });
 
-    res.status(200).json({
-      id: session.id,
-      url: session.url,
-    });
-  } catch (error) {
-    console.error("Stripe checkout error:", error);
-    res.status(500).json({
-      message: "Failed to create checkout session",
-      error: error.message,
-    });
-  }
+  res.json({ url: session.url });
 };
+
+
+export const paystackCheckout = async (req, res) => {
+  const { userId, email, cartItems } = req.body;
+
+  const amount = cartItems.reduce(
+    (sum, item) => sum + item.price * item.quantity,
+    0
+  );
+
+  const response = await axios.post(
+    "https://api.paystack.co/transaction/initialize",
+    {
+      email,
+      amount: amount * 100, // kobo
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
+      },
+    }
+  );
+
+  await Order.create({
+    userId,
+    products: cartItems,
+    amount,
+    currency: "NGN",
+    gateway: "paystack",
+    reference: response.data.data.reference,
+  });
+
+  res.json({
+    authorization_url: response.data.data.authorization_url,
+    reference: response.data.data.reference,
+  });
+};
+
+
+export const verifyPaystack = async (req, res) => {
+  const { reference } = req.params;
+
+  const response = await axios.get(
+    `https://api.paystack.co/transaction/verify/${reference}`,
+    {
+      headers: {
+        Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
+      },
+    }
+  );
+
+  if (response.data.data.status !== "success") {
+    return res.status(400).json({ message: "Payment not successful" });
+  }
+
+  const order = await Order.findOne({ reference });
+  order.status = "paid";
+  await order.save();
+
+  await Cart.findOneAndDelete({ userId: order.userId });
+
+  res.json({ message: "Payment verified" });
+};
+
+
+
+export const downloadTemplate = async (req, res) => {
+  const { productId } = req.params;
+  const userId = req.user.id;
+
+  const hasPaid = await Order.findOne({
+    userId,
+    "products.productId": productId,
+    status: "paid",
+  });
+
+  if (!hasPaid) {
+    return res.status(403).json({ message: "Payment required" });
+  }
+
+  const product = await Product.findById(productId);
+
+  res.json({
+    downloadUrl: product.downloadUrl,
+  });
+};
+
+

@@ -18,7 +18,10 @@ import {
   getCart,
   removeFromCart,
   clearCart,
-  createCheckoutSession,
+  stripeCheckout,
+  paystackCheckout,
+  verifyPaystack,
+  downloadTemplate,
 } from "../controllers/authController.js";
 import protect from "../middleware/authMiddleware.js";
 import upload from "../middleware/upload.js";
@@ -45,5 +48,9 @@ router.post("/add", protect, addToCart);
 router.get("/getCart/:userId", getCart);
 router.delete("/remove/:userId/:productId", protect, removeFromCart);
 router.delete("/clear/:userId", protect, clearCart);
-router.post("/create-checkout-session", protect, createCheckoutSession);
+router.post("/stripe", protect, stripeCheckout);
+router.post("/paystack", protect, paystackCheckout);
+router.get("/paystack/verify/:reference", verifyPaystack);
+router.get("/:productId",  downloadTemplate);
+
 export default router;
