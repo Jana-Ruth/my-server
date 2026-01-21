@@ -12,7 +12,7 @@ import {
   getAllUsers,
   createProduct,
   deleteProduct,
-  getProductById, 
+  getProductById,
   getAllProducts,
   addToCart,
   getCart,
@@ -23,34 +23,53 @@ import {
   verifyPaystack,
   downloadTemplate,
 } from "../controllers/authController.js";
+
 import protect from "../middleware/authMiddleware.js";
 import upload from "../middleware/upload.js";
 
 const router = express.Router();
 
-
+/* ================= AUTH ================= */
 router.post("/signup", signup);
-router.delete("/deleteUser/:id", protect, deleteUser);
-router.get("/verify/:token", verifyEmail);
 router.post("/login", login);
+router.get("/verify/:token", verifyEmail);
 router.post("/forgot-password", forgotPassword);
 router.post("/reset-password", resetPassword);
 router.get("/me", protect, getUserDetails);
+
+/* ================= USERS ================= */
 router.get("/users", getAllUsers);
 router.get("/admins", getAllAdmins);
-router.post("/createProduct", protect, upload.fields([{ name: "image", maxCount: 1 },{ name: "subImages", maxCount: 6 },]), createProduct);        // POST new product
-router.get("/getAllProducts", getAllProducts);        // Get all products
-router.get("/:id", getProductById);     // Get one product by ID
-router.delete("/delete/:id", protect, deleteProduct);
-router.put("/setRole/:id", protect, setUserRole)
-// Protected routes — must be logged in
-router.post("/add", protect, addToCart);
-router.get("/getCart/:userId", getCart);
-router.delete("/remove/:userId/:productId", protect, removeFromCart);
-router.delete("/clear/:userId", protect, clearCart);
-router.post("/stripe", protect, stripeCheckout);
-router.post("/paystack", protect, paystackCheckout);
-router.get("/paystack/verify/:reference", verifyPaystack);
-router.get("/:productId",  downloadTemplate);
+router.delete("/deleteUser/:id", protect, deleteUser);
+router.put("/setRole/:id", protect, setUserRole);
+
+/* ================= PRODUCTS ================= */
+router.post(
+  "/products",
+  protect,
+  upload.fields([
+    { name: "image", maxCount: 1 },
+    { name: "subImages", maxCount: 6 },
+  ]),
+  createProduct
+);
+
+router.get("/products", getAllProducts);
+router.get("/products/:id", getProductById);
+router.delete("/products/:id", protect, deleteProduct);
+
+/* ================= CART ================= */
+router.post("/cart/add", protect, addToCart);
+router.get("/cart/:userId", getCart);
+router.delete("/cart/remove/:userId/:productId", protect, removeFromCart);
+router.delete("/cart/clear/:userId", protect, clearCart);
+
+/* ================= PAYMENTS ================= */
+router.post("/checkout/stripe", protect, stripeCheckout);
+router.post("/checkout/paystack", protect, paystackCheckout);
+router.get("/checkout/paystack/verify/:reference", verifyPaystack);
+
+/* ================= DOWNLOAD ================= */
+router.get("/download/:productId", downloadTemplate);
 
 export default router;
